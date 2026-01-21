@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis de Comprensión Lectora | Gestión de Centro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        :root { --primary: #2563eb; --bg-main: #fcfdfe; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: var(--bg-main); color: #1e293b; }
+        .tab-active { background-color: white; color: var(--primary); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); font-weight: 700; }
+        .drop-zone { border: 2px dashed #e2e8f0; transition: all 0.4s ease; cursor: pointer; }
+        .drop-zone:hover { border-color: var(--primary); background-color: #f8fafc; }
+        .drop-zone.drag-over { border-color: var(--primary); background-color: #eff6ff; }
+        
+        #pdf-cover { display: none; }
+        .page-break { page-break-before: always; }
+        
+        /* Contenedor optimizado para PDF */
+        .chart-wrapper-pdf {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            height: 280px; /* Tamaño reducido para encajar en A4 sin recortes */
+        }
+
+        @media print {
+            .no-print { display: none; }
+            .bg-white { box-shadow: none !important; border: none !important; }
+        }
+    </style>
+<style type="text/css">
+.grande { font-size: 60px; }
+</style>
+<script>
+// Escribir aqui el código Javascript
+</script>
+</head>
+<body class="min-h-screen flex flex-col">
+
+<div class="flex-grow max-w-6xl mx-auto w-full px-4 py-12">
+    <!-- Header -->
+    <header class="mb-12 text-center no-print">
+        <div class="inline-block px-4 py-1.5 mb-4 text-xs font-bold tracking-widest text-blue-600 uppercase bg-blue-50 rounded-full">Gestión Académica Profesional</div>
+        <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">Comprensión Lectora</h1>
+        <p class="text-slate-500 max-w-2xl mx-auto text-lg">Auditoría de resultados académicos por niveles y grupos.</p>
+
+        <div class="mt-8 flex flex-wrap justify-center gap-4">
+            <button onclick="loadDemo()" class="flex items-center gap-2 px-6 py-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-lg text-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Cargar Datos de Ejemplo
+            </button>
+        </div>
+    </header>
+
+    <!-- Navegación -->
+    <nav class="bg-slate-100/50 p-1.5 rounded-2xl mb-12 flex flex-wrap max-w-md mx-auto no-print">
+        <button onclick="showTab('info')" id="btn-info" class="flex-1 py-3 px-4 rounded-xl text-sm transition-all tab-active">Datos</button>
+        <button onclick="showTab('analysis')" id="btn-analysis" class="flex-1 py-3 px-4 rounded-xl text-sm transition-all text-slate-500 hover:text-slate-700">Análisis</button>
+        <button onclick="showTab('export')" id="btn-export" class="flex-1 py-3 px-4 rounded-xl text-sm transition-all text-slate-500 hover:text-slate-700">Exportar</button>
+    </nav>
+
+    <!-- PESTAÑA: CARGA -->
+    <section id="tab-info" class="space-y-8 no-print">
+        <div class="max-w-xl mx-auto bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+            <h2 class="text-xl font-bold text-slate-800 mb-2">Desglose Grupal</h2>
+            <p class="text-xs text-slate-400 mb-6 font-medium">Sube el Excel con los datos de 1º a 4º de ESO por grupos.</p>
+            <div id="drop-group" class="drop-zone p-12 rounded-2xl text-center">
+                <p class="text-slate-400 text-sm font-medium">Arrastra el archivo aquí o haz clic</p>
+                <input type="file" id="input-group" class="hidden" accept=".xlsx, .xls">
+                <div id="status-group" class="mt-4 text-sm font-bold text-indigo-600"></div>
+            </div>
+            <div class="mt-8 flex justify-center">
+                <button onclick="startAnalysis()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-12 rounded-2xl shadow-xl transition-all w-full">PROCESAR ANÁLISIS</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- PESTAÑA: ANÁLISIS -->
+    <section id="tab-analysis" class="hidden">
+        <div id="report-container" class="bg-white p-8 md:p-14 rounded-[40px] shadow-sm">
+            
+            <!-- Portada PDF -->
+            <div id="pdf-cover" class="h-[900px] flex flex-col items-center justify-center text-center p-20 border-[12px] border-blue-50 mb-20 bg-white">
+                <h1 class="text-6xl font-black text-slate-900 mb-4">INFORME DE COMPRENSIÓN LECTORA</h1>
+                <p class="text-2xl text-blue-600 font-bold mb-10">Análisis Consolidado de Centro</p>
+                <div class="w-24 h-1 bg-slate-200 rounded-full mb-10"></div>
+                <p id="pdf-date" class="text-slate-400 text-xl"></p>
+            </div>
+
+            <!-- Resumen Destacado -->
+            <div class="mb-12 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-blue-600 p-8 rounded-[32px] text-white shadow-blue-200 shadow-lg">
+                    <p class="text-blue-100 font-bold uppercase tracking-widest text-xs mb-2">Total Alumnado Evaluado</p>
+                    <h4 id="highlight-total" class="text-5xl font-black">0</h4>
+                    <p class="mt-4 text-sm text-blue-100">Suma total de todos los niveles educativos analizados.</p>
+                </div>
+                <div class="bg-slate-900 p-8 rounded-[32px] text-white">
+                    <p class="text-slate-400 font-bold uppercase tracking-widest text-xs mb-2">Cobertura del Centro</p>
+                    <h4 class="text-5xl font-black">100%</h4>
+                    <p class="mt-4 text-sm text-slate-400">Datos procesados desde 1º de ESO hasta 4º de ESO.</p>
+                </div>
+            </div>
+
+            <!-- Estadísticas Globales -->
+            <div class="mb-16">
+                <h3 class="text-2xl font-extrabold text-slate-800 mb-8 flex items-center gap-3">
+                    <span class="w-2 h-8 bg-blue-600 rounded-full"></span> 1. Estadísticas Globales del Centro
+                </h3>
+                <div class="border border-slate-100 rounded-3xl overflow-hidden shadow-sm">
+                    <table class="w-full">
+                        <thead class="bg-slate-50 text-slate-500 text-xs font-bold uppercase">
+                            <tr>
+                                <th class="px-8 py-5 text-left">Nivel Competencial</th>
+                                <th class="px-8 py-5 text-center">Nº Alumnos</th>
+                                <th class="px-8 py-5 text-right">Porcentaje</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-global" class="divide-y divide-slate-100 text-slate-700 text-lg"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Análisis por Niveles -->
+            <div class="mb-16 page-break pt-10">
+                <h3 class="text-2xl font-extrabold text-slate-800 mb-8 flex items-center gap-3">
+                    <span class="w-2 h-8 bg-emerald-500 rounded-full"></span> 2. Análisis Diferenciado por Niveles Educativos
+                </h3>
+                <div class="border border-slate-100 rounded-3xl overflow-hidden shadow-sm">
+                    <table class="w-full">
+                        <thead class="bg-slate-50 text-slate-500 text-xs font-bold uppercase">
+                            <tr>
+                                <th class="px-8 py-5 text-left">Nivel Educativo</th>
+                                <th class="px-4 py-5 text-center text-green-600">Óptimo</th>
+                                <th class="px-4 py-5 text-center text-amber-500">Medio</th>
+                                <th class="px-4 py-5 text-center text-red-500">Inadecuado</th>
+                                <th class="px-4 py-5 text-center font-black">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-levels" class="divide-y divide-slate-100 text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Gráfico y Tabla Grupal -->
+            <div class="mb-16 page-break pt-10">
+                <h3 class="text-2xl font-extrabold text-slate-800 mb-8 flex items-center gap-3">
+                    <span class="w-2 h-8 bg-indigo-600 rounded-full"></span> 3. Análisis Grupal Detallado
+                </h3>
+                <div class="bg-slate-50 p-6 rounded-[32px] border border-slate-100 mb-8">
+                    <div class="chart-wrapper-pdf">
+                        <canvas id="chart-groups"></canvas>
+                    </div>
+                </div>
+                <div class="border border-slate-100 rounded-3xl overflow-hidden shadow-sm">
+                    <table class="w-full text-sm">
+                        <thead class="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+                            <tr><th class="px-6 py-4 text-left">Grupo</th><th class="px-4 py-4 text-center">Óptimo</th><th class="px-4 py-4 text-center">Medio</th><th class="px-4 py-4 text-center">Inadecuado</th></tr>
+                        </thead>
+                        <tbody id="table-groups" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Pedagógico -->
+            <div class="space-y-6 page-break pt-10">
+                <h3 class="text-2xl font-extrabold text-slate-800 mb-4 flex items-center gap-3">
+                    <span class="w-2 h-8 bg-orange-500 rounded-full"></span> 4. Plan de Acción Recomendado
+                </h3>
+                <div id="pedagogy-content" class="grid gap-4">
+                    <div class="bg-blue-50 p-6 rounded-2xl border border-blue-100">
+                        <p id="txt-pedagogy" class="text-slate-700 text-sm leading-relaxed"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PESTAÑA: EXPORTAR -->
+    <section id="tab-export" class="hidden">
+        <div class="bg-white p-12 rounded-[40px] shadow-xl border border-slate-100 text-center max-w-xl mx-auto">
+            <h2 class="text-3xl font-extrabold text-slate-800 mb-8">Exportar Informe</h2>
+            <button onclick="exportPDF()" class="w-full bg-slate-900 hover:bg-black text-white font-bold py-6 rounded-2xl flex items-center justify-center gap-3 transition-all mb-4">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                DESCARGAR PDF PARA IMPRESIÓN
+            </button>
+            <button onclick="location.reload()" class="text-red-500 text-sm font-bold">Borrar datos y empezar de nuevo</button>
+        </div>
+    </section>
+</div>
+
+<script>
+    let rawData = [];
+    let myChart = null;
+
+    function showTab(tabId) {
+        ['info', 'analysis', 'export'].forEach(t => {
+            document.getElementById(`tab-${t}`).classList.add('hidden');
+            document.getElementById(`btn-${t}`).className = 'flex-1 py-3 px-4 rounded-xl text-sm transition-all text-slate-500';
+        });
+        document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+        document.getElementById(`btn-${tabId}`).className = 'flex-1 py-3 px-4 rounded-xl text-sm transition-all tab-active';
+    }
+
+    setupDragAndDrop('drop-group', 'input-group', 'status-group', d => rawData = d);
+
+    function setupDragAndDrop(dropId, inputId, statusId, callback) {
+        const dropZone = document.getElementById(dropId);
+        const input = document.getElementById(inputId);
+        dropZone.onclick = () => input.click();
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('bg-blue-50'); };
+        dropZone.ondrop = (e) => { e.preventDefault(); handleFile(e.dataTransfer.files[0], statusId, callback); };
+        input.onchange = (e) => handleFile(e.target.files[0], statusId, callback);
+    }
+
+    function handleFile(file, statusId, callback) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+            const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+            document.getElementById(statusId).textContent = `✓ ${file.name}`;
+            callback(json);
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function loadDemo() {
+        rawData = [
+            { "Grupo": "1º de ESO A", "Óptimo": 14, "Medio": 10, "Inadecuado": 3 },
+            { "Grupo": "1º de ESO B", "Óptimo": 12, "Medio": 12, "Inadecuado": 4 },
+            { "Grupo": "2º de ESO A", "Óptimo": 18, "Medio": 8, "Inadecuado": 2 },
+            { "Grupo": "3º de ESO A", "Óptimo": 20, "Medio": 6, "Inadecuado": 1 },
+            { "Grupo": "4º de ESO A", "Óptimo": 22, "Medio": 4, "Inadecuado": 0 }
+        ];
+        startAnalysis();
+    }
+
+    function startAnalysis() {
+        if (!rawData.length) return alert("Carga un archivo con datos.");
+        
+        // 1. Procesar grupos con limpieza estricta
+        const groups = rawData.map(row => {
+            const values = Object.values(row);
+            return {
+                n: String(values[0]),
+                o: parseInt(values[1]) || 0,
+                m: parseInt(values[2]) || 0,
+                i: parseInt(values[3]) || 0
+            };
+        });
+
+        // 2. Sumatorio Global Preciso
+        const global = groups.reduce((acc, g) => {
+            acc.o += g.o; acc.m += g.m; acc.i += g.i;
+            return acc;
+        }, { o: 0, m: 0, i: 0 });
+
+        const totalEvaluados = global.o + global.m + global.i;
+        document.getElementById('highlight-total').textContent = totalEvaluados;
+
+        // Render Tabla Global
+        document.getElementById('table-global').innerHTML = [
+            { l: 'Óptimo', v: global.o, c: 'text-green-600', b: 'bg-green-100' },
+            { l: 'Medio', v: global.m, c: 'text-amber-500', b: 'bg-amber-100' },
+            { l: 'Inadecuado', v: global.i, c: 'text-red-500', b: 'bg-red-100' }
+        ].map(r => `
+            <tr>
+                <td class="px-8 py-5 font-bold ${r.c}">${r.l}</td>
+                <td class="px-8 py-5 text-center font-black">${r.v}</td>
+                <td class="px-8 py-5 text-right"><span class="${r.b} px-4 py-1 rounded-full text-xs font-black text-slate-700">${totalEvaluados ? ((r.v/totalEvaluados)*100).toFixed(1) : 0}%</span></td>
+            </tr>
+        `).join('');
+
+        // 3. Procesar por Niveles (Nomenclatura Exacta)
+        const levelsMap = {};
+        groups.forEach(g => {
+            // Buscamos el patrón "Xº de ESO" o similares al inicio
+            let match = g.n.match(/^\d+º\s*de\s*ESO/i);
+            let levelName = match ? match[0].toUpperCase() : g.n.split(' ').slice(0,3).join(' ');
+            
+            if(!levelsMap[levelName]) levelsMap[levelName] = { o:0, m:0, i:0 };
+            levelsMap[levelName].o += g.o;
+            levelsMap[levelName].m += g.m;
+            levelsMap[levelName].i += g.i;
+        });
+
+        document.getElementById('table-levels').innerHTML = Object.entries(levelsMap).map(([name, d]) => `
+            <tr class="hover:bg-slate-50 transition-colors">
+                <td class="px-8 py-4 font-bold text-slate-800">${name}</td>
+                <td class="text-center font-semibold text-green-600">${d.o}</td>
+                <td class="text-center font-semibold text-amber-500">${d.m}</td>
+                <td class="text-center font-semibold text-red-500">${d.i}</td>
+                <td class="text-center font-black bg-slate-50">${d.o + d.m + d.i}</td>
+            </tr>
+        `).join('');
+
+        // 4. Gráfico Optimizado para PDF
+        const ctx = document.getElementById('chart-groups').getContext('2d');
+        if (myChart) myChart.destroy();
+        myChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: groups.map(g => g.n),
+                datasets: [
+                    { label: 'Óptimo', data: groups.map(g => g.o), backgroundColor: '#22c55e' },
+                    { label: 'Medio', data: groups.map(g => g.m), backgroundColor: '#f59e0b' },
+                    { label: 'Inadecuado', data: groups.map(g => g.i), backgroundColor: '#ef4444' }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { 
+                    legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10, weight: 'bold' } } }
+                },
+                scales: {
+                    x: { stacked: true, ticks: { font: { size: 9 } } },
+                    y: { stacked: true, beginAtZero: true }
+                }
+            }
+        });
+
+        document.getElementById('table-groups').innerHTML = groups.map(g => `
+            <tr>
+                <td class="px-6 py-3 font-bold text-slate-700">${g.n}</td>
+                <td class="text-center text-green-600">${g.o}</td>
+                <td class="text-center text-amber-500">${g.m}</td>
+                <td class="text-center text-red-500">${g.i}</td>
+            </tr>
+        `).join('');
+
+        document.getElementById('txt-pedagogy').textContent = `Tras analizar a los ${totalEvaluados} alumnos, se recomienda priorizar los apoyos en los grupos con mayor tasa de 'Inadecuado' (${global.i} alumnos totales en el centro). Los niveles con mayor éxito (Óptimo) deben servir de modelo para la implementación de nuevas estrategias de lectura compartida.`;
+
+        showTab('analysis');
+    }
+
+    function exportPDF() {
+        const element = document.getElementById('report-container');
+        const cover = document.getElementById('pdf-cover');
+        cover.style.display = 'flex';
+        document.getElementById('pdf-date').textContent = "Generado el " + new Date().toLocaleDateString();
+
+        const opt = {
+            margin: [10, 5, 10, 5],
+            filename: 'Informe_Lectura_Centro.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['css', 'legacy'] }
+        };
+
+        html2pdf().set(opt).from(element).save().then(() => {
+            cover.style.display = 'none';
+        });
+    }
+</script>
+
+
+</body></html>
